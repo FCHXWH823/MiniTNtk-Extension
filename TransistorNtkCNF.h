@@ -50,6 +50,8 @@ private:
 	// version: 2023/5/9
 	int AccTech1Flag, AccTech2Flag; // flag1: representative patterns; flag2: pre-define transistors for existed literals of the given factored form
 
+	string CGString;
+
 public:
 	TransistorCNF();
 	TransistorCNF(TransistorNtk ntk);
@@ -204,6 +206,7 @@ public:
 	}
 	int GetAccFlag1() { return AccTech1Flag; }
 	int GetAccFlag2() { return AccTech2Flag; }
+	string GetCGString() { return CGString; }
 };
 
 class MultiOutTransistorCNF :public TransistorCNF {

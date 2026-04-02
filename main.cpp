@@ -4,6 +4,7 @@
 #include <vector>
 #include <cmath>
 #include <chrono>
+#include <cstdio>
 #include "TransistorNtk.h"
 #include "TransistorNtkCNF.h"
 #include "PathLimitation.h"
@@ -120,7 +121,7 @@ static void DebugTruthTables(const string& label,
 }
 
 pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string FuncName, vector<string> Funcs, int nTransistors,
-	vector<transistor>& Transistors, int mos, int INVOUT, 
+	vector<transistor>& Transistors, int mos, int INVOUT, string& cgStringOut,
 	int timeBound = 3600, int nPreSetTransistors = 0,
 	int DepthLimited = 1, int AccFlag1 = 1, int AccFlag2 = 1, vector<vector<int>> vPreSetTransistors = {}) {
 	int SatFlag = 0;
@@ -184,6 +185,7 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 				// TMultiCnfTmp.ParseCnf("./" + TMultiOutNtk.NtkName + "_out.cnf");
 				if (TMultiCnfTmp.GetSatResult()) {
 					SatFlag = 1;
+					cgStringOut = TMultiCnfTmp.GetCGString();
 					return make_pair(Literals, make_pair(TMultiCnfTmp.GetExact(), (DepthLimited) ? TMultiCnfTmp.GetIsDepthLimited() : 1));
 					// fExcel << TMultiOutNtk.NtkName << "," << NPTransistorsWithINV(Tran2InputVarsTmp, TMultiCnfTmp.GetnVars(), nTransistors, OutInvFlags) << "," << elapsed_time.count() << "," << "SAT" << endl;
 
@@ -226,6 +228,7 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 						TMultiCnf.SetExact(1);
 					else
 						TMultiCnf.SetExact(0);
+					cgStringOut = TMultiCnf.GetCGString();
 					return make_pair(Literals, make_pair(TMultiCnf.GetExact(), (DepthLimited) ? TMultiCnf.GetIsDepthLimited() : 1));
 				}
 				int AddBlockConstraintsTimes = 0;
@@ -239,8 +242,10 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 						TMultiCnf.SetExact(1);
 					else
 						TMultiCnf.SetExact(0);
-					if(TMultiCnf.GetIsDepthLimited())
+					if(TMultiCnf.GetIsDepthLimited()) {
+						cgStringOut = TMultiCnf.GetCGString();
 						return make_pair(Literals, make_pair(TMultiCnf.GetExact(), (DepthLimited) ? TMultiCnf.GetIsDepthLimited() : 1));
+					}
 					TMultiCnf.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
 					system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 					Literals = TMultiCnf.ParseCnf(mos, Transistors, INVOUT, dir + TMultiOutNtk.NtkName + "_out.cnf", dir);
@@ -489,9 +494,9 @@ int main(int argc, char* argv[]) {
 	ofstream fExcel;
 	fExcel.open(argv[1] + string("PClassResults.csv"));
 	if (DepthLimited)
-		fExcel << "Boolean Func,#Transistors,Runtime(ms),SatResult,DepthLimited" << endl;
+		fExcel << "Boolean Func,#Transistors,PDN-CG,PUN-CG,Runtime(ms),SatResult,DepthLimited" << endl;
 	else
-		fExcel << "Boolean Func,#Transistors,Runtime(ms),SatResult" << endl;
+		fExcel << "Boolean Func,#Transistors,PDN-CG,PUN-CG,Runtime(ms),SatResult" << endl;
 	for (auto it = BoolFuncs.begin(); it != BoolFuncs.end(); it++) {
 		string FuncName = (*it).first;
 		vector<string> Funcs = split((*it).second.first, '|');
@@ -512,11 +517,12 @@ int main(int argc, char* argv[]) {
 		pair<vector<string>,pair<int,int>> LiteralsPDN, LiteralsPUN; // literals, whether satisfying given Boolean functions, whether satisfying the given depth limitation
 		// version: 2023/6/5
 		vector<transistor> transistors_PDN, transistors_PUN;
+		string cgStringPDN, cgStringPUN;
 		// pair<vector<int>, pair<int,int>> Tran2InputVarsandnVars = TransistorExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, atoi(argv[3]), atoi(argv[2]));
 		if (useMustNet) {
-			LiteralsPDN = MustNetExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], atoi(argv[3]), DepthLimited, AccFlag1, AccFlag2, placementFlag);
+			LiteralsPDN = MustNetExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], cgStringPDN, atoi(argv[3]), DepthLimited, AccFlag1, AccFlag2, placementFlag);
 		} else {
-			LiteralsPDN = TransistorExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
+			LiteralsPDN = TransistorExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], cgStringPDN, atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
 		}
 		// version: 2023/4/29
 		SAT *= LiteralsPDN.second.first;
@@ -530,9 +536,9 @@ int main(int argc, char* argv[]) {
 		if (!OnlyPDNFlag) {
 			pair<vector<string>, int> InputNegFuncs = InputNeg(Funcs, argv[1]);
 			if (useMustNet) {
-				LiteralsPUN = MustNetExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], atoi(argv[3]), DepthLimited, AccFlag1, AccFlag2, placementFlag);
+				LiteralsPUN = MustNetExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], cgStringPUN, atoi(argv[3]), DepthLimited, AccFlag1, AccFlag2, placementFlag);
 			} else {
-				LiteralsPUN = TransistorExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
+				LiteralsPUN = TransistorExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], cgStringPUN, atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
 			}
 			SAT *= LiteralsPUN.second.first;
 			SATDepthLimited *= LiteralsPUN.second.second;
@@ -571,19 +577,25 @@ int main(int argc, char* argv[]) {
 			FuncName.erase(FuncName.begin());
 		if (CountInputINV) {
 			if (DepthLimited)
-				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
+				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
 			else
- 				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
+ 				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
 			cout << "Total transistors: " << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << endl;
 		}	
 		else {
 			if (DepthLimited)
-				fExcel << FuncName << "," << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
+				fExcel << FuncName << "," << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
 			else
-				fExcel << FuncName << "," << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
+				fExcel << FuncName << "," << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
 			cout << "Total transistors: " << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << endl;
 		}
 
+		// Clean up intermediate files
+		std::remove("NegFunc.eqn");
+		std::remove("NegFunc_out.eqn");
+		// Remove CNF files generated during synthesis
+		string cleanCmd = "rm -f " + string(argv[1]) + "*.cnf 2>/dev/null";
+		system(cleanCmd.c_str());
 
 		//	// the following can be annotated
 		//	int SatFlag = 0;

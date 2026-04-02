@@ -1,2 +1,2 @@
-Boolean Func,#Transistors,Runtime(ms),SatResult,DepthLimited
-361,26,255214,SAT,1
+Boolean Func,#Transistors,PDN-CG,PUN-CG,Runtime(ms),SatResult
+361,24,CG(nc=10, r=9, tr=[(1, 4, 0), (1, 2, 1), (2, 9, 2), (0, 2, 3), (2, 7, 4), (4, 7, 5), (1, 9, 6), (0, 7, 6), (0, 4, 2)]),CG(nc=10, r=9, tr=[(0, 2, 0), (1, 2, 1), (1, 9, 2), (0, 3, 3), (2, 9, 4), (1, 4, 5), (1, 3, 6), (4, 9, 0), (3, 4, 4)]),128586,SAT

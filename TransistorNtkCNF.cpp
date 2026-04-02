@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <set>
 #include <map>
+#include <sstream>
 
 MultiOutTransistorCNF::MultiOutTransistorCNF() {
 
@@ -1658,7 +1659,8 @@ vector<string> TransistorCNF::ParseCnf(int mos, vector<transistor>& Transistors,
 
 	// Print the converted graph in CG format for comparison with other methods
 	if (SatResult) {
-		cout << "CG(nc=" << clusters.size() << ", r=" << transistors_pairs.size() << ", tr=[";
+		ostringstream oss;
+		oss << "CG(nc=" << clusters.size() << ", r=" << transistors_pairs.size() << ", tr=[";
 		for (int i = 0; i < (int)transistors_pairs.size(); i++) {
 			int c1 = transistors_pairs[i].first.first;
 			int c2 = transistors_pairs[i].first.second;
@@ -1668,12 +1670,12 @@ vector<string> TransistorCNF::ParseCnf(int mos, vector<transistor>& Transistors,
 				litIdx = nInputs + (int)(svars.find(lit[1]));
 			else
 				litIdx = (int)(svars.find(lit[0]));
-			cout << "(" << c1 << ", " << c2 << ", " << litIdx << ")";
-			if (i + 1 < (int)transistors_pairs.size()) cout << ", ";
+			oss << "(" << c1 << ", " << c2 << ", " << litIdx << ")";
+			if (i + 1 < (int)transistors_pairs.size()) oss << ", ";
 		}
-		cout << "]";
+		oss << "]";
 		if (!dropped_transistors.empty()) {
-			cout << ", dropped=[";
+			oss << ", dropped=[";
 			for (int i = 0; i < (int)dropped_transistors.size(); i++) {
 				int node = dropped_transistors[i].first;
 				const string& lit = dropped_transistors[i].second;
@@ -1682,12 +1684,14 @@ vector<string> TransistorCNF::ParseCnf(int mos, vector<transistor>& Transistors,
 					litIdx = nInputs + (int)(svars.find(lit[1]));
 				else
 					litIdx = (int)(svars.find(lit[0]));
-				cout << "(" << node << ", " << litIdx << ")";
-				if (i + 1 < (int)dropped_transistors.size()) cout << ", ";
+				oss << "(" << node << ", " << litIdx << ")";
+				if (i + 1 < (int)dropped_transistors.size()) oss << ", ";
 			}
-			cout << "]";
+			oss << "]";
 		}
-		cout << ")" << endl;
+		oss << ")";
+		CGString = oss.str();
+		cout << CGString << endl;
 	}
 
 	// version:2023/3/22

@@ -1,3 +1,7 @@
 *.dSYM/
 *.out
 xschem_sky130/
+*.cnf
+NegFunc*.eqn
+Transistors_*.dot
+Transistors_*.pdf

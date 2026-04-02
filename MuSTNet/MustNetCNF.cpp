@@ -718,6 +718,27 @@ vector<string> MustNetCNF::ParseCnf(int mos, vector<transistor>& Transistors,
 			 << "] -- net" << tp.first.second << endl;
 	}
 
+	// Print CG format for comparison with MiniTNtk
+	{
+		ostringstream oss;
+		oss << "CG(nc=" << nNets << ", r=" << transistor_pairs.size() << ", tr=[";
+		for (int i = 0; i < (int)transistor_pairs.size(); i++) {
+			int n1 = transistor_pairs[i].first.first;
+			int n2 = transistor_pairs[i].first.second;
+			const string& lit = transistor_pairs[i].second;
+			int litIdx;
+			if (lit[0] == '!')
+				litIdx = nInputs + (int)(svars.find(lit[1]));
+			else
+				litIdx = (int)(svars.find(lit[0]));
+			oss << "(" << n1 << ", " << n2 << ", " << litIdx << ")";
+			if (i + 1 < (int)transistor_pairs.size()) oss << ", ";
+		}
+		oss << "])";
+		CGString = oss.str();
+		cout << CGString << endl;
+	}
+
 	// Display placement result if placement was enabled
 	if (placementFlag && !tpVar.empty()) {
 		cout << "[MuSTNet] Placement (column order):" << endl;
@@ -832,7 +853,7 @@ vector<string> MustNetCNF::GetAllLiterals() {
 
 pair<vector<string>, pair<int, int>> MustNetExactSynthesis(
 	string dir, string FuncName, vector<string> Funcs, int nTransistors,
-	vector<transistor>& Transistors, int mos, int INVOUT,
+	vector<transistor>& Transistors, int mos, int INVOUT, string& cgStringOut,
 	int timeBound, int DepthLimited, int AccFlag1, int AccFlag2,
 	int placementFlag)
 {
@@ -905,6 +926,7 @@ pair<vector<string>, pair<int, int>> MustNetExactSynthesis(
 
 		if (cnf.GetSatResult()) {
 			SatFlag = 1;
+			cgStringOut = cnf.GetCGString();
 			return make_pair(Literals, make_pair(1, 1));
 		}
 

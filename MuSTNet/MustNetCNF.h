@@ -63,6 +63,8 @@ private:
 	// rightDiff[j][n]: right diffusion of column j is net n
 	vector<vector<int>> rightDiff;
 
+	string CGString;
+
 public:
 	MustNetCNF();
 	MustNetCNF(MustNetNtk Ntk);
@@ -124,12 +126,13 @@ public:
 	int GetNumClauses() { return (int)clauses.size(); }
 	void SetPlacementFlag(int f) { placementFlag = f; }
 	int GetPlacementFlag() { return placementFlag; }
+	string GetCGString() { return CGString; }
 };
 
 // MuSTNet synthesis function (parallel to TransistorExactSynthesis)
 pair<vector<string>, pair<int, int>> MustNetExactSynthesis(
 	string dir, string FuncName, vector<string> Funcs, int nTransistors,
-	vector<transistor>& Transistors, int mos, int INVOUT,
+	vector<transistor>& Transistors, int mos, int INVOUT, string& cgStringOut,
 	int timeBound, int DepthLimited, int AccFlag1, int AccFlag2,
 	int placementFlag = 0);
 
