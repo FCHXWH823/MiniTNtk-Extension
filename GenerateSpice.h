@@ -19,11 +19,13 @@ typedef struct transistor_ {
 	float basicW = 0.25; // 45 NM
 	// float basicW = 23; // 7 NM
 	int nFin;
+
+	int maxPathLength = 0; // the maximum path length of the transistor
 }transistor;
 
 vector<transistor> DeriveSourceDrains(vector<pair<pair<int, int>, string>> transistors_pairs);
 vector<transistor> transformTransistors(int nClusters, int InputClusterID, int OutClusterID, vector<pair<pair<int, int>, string>> transistors_pairs, int mos);
-void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<transistor> transistorsPUN, vector<transistor> transistorsPDN);
+void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<transistor> transistorsPUN, vector<transistor> transistorsPDN, map<string, int> path_statistics);
 void GenerateTransistors(set<string> AllLiterals, vector<transistor>& transistorsPUN, vector<transistor>& transistorsPDN);
 void GenerateTransistors(set<string> AllLiterals, vector<transistor>& transistorsPUN, vector<transistor>& transistorsPDN, int OutINV);
 vector<transistor> transformTransistors(int nClusters, int InputClusterID, int OutClusterID, vector<pair<pair<int, int>, string>> transistors_pairs, map<pair<int, int>, int> transistors_Counts, int mos, int OutINV);

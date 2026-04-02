@@ -1,0 +1,102 @@
+{
+    // .vscode/launch.json
+    // VS Code > Run & Debug > add configuration > "C/C++: (gdb) Launch" template
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "(lldb) Launch",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "/Users/fch/Python/MiniTNtk-Extension/MiniTNtk.out",
+        "args": [
+              "./",
+              "0",
+              "30",
+              "0",
+              "0",
+              "1",
+              "1",
+              "1",
+              "./SpiceNetlists/"
+        ],
+        "stopAtEntry": false,
+        "cwd": "${fileDirname}",
+        "environment": [],
+        "externalConsole": false,
+        "MIMode": "lldb",
+        "preLaunchTask": "C/C++: clang build active file"
+      }
+      // {
+      //   "name": "Debug with gdb",
+      //   "type": "cppdbg",
+      //   "request": "launch",
+  
+      //   // ---- YOUR PROGRAM ----------------------------------------------------
+      //   "program": "/Users/fch/Python/MiniTNtk-Extension/MiniTNtk.out",   //  <-- TODO
+      //   "args": [
+      //           "./",
+      //           "0",
+      //           "100",
+      //           "1",
+      //           "0",
+      //           "1",
+      //           "1",
+      //           "1"
+      //   ],
+      //   // ---------------------------------------------------------------------
+  
+      //   "cwd": "${workspaceFolder}",
+      //   "stopAtEntry": true,
+      //   "externalConsole": false,
+  
+      //   // --- gdb specifics ----------------------------------------------------
+      //   "MIMode": "gdb",
+      //   "miDebuggerPath": "/opt/homebrew/bin/gdb",   // <-- TODO if not Homebrew
+      //   "targetArchitecture": "arm64",
+      //   "setupCommands": [
+      //     {
+      //       "description": "Enable GDB pretty printing",
+      //       "text": "-enable-pretty-printing",
+      //       "ignoreFailures": true
+      //     }
+      //   ],
+  
+      //   // Optional: build first
+      //   "preLaunchTask": "C/C++: clang build active file"
+      // }
+    ]
+}
+  
+// {
+//     // Use IntelliSense to learn about possible attributes.
+//     // Hover to view descriptions of existing attributes.
+//     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+//     "version": "0.2.0",
+//     "configurations": [
+//         // {
+//         //     "name": "C++ Launch",
+//         //     "type": "cppdbg",
+//         //     "request": "launch",
+//         //     // "program": "${workspaceFolder}/a.out",
+//         //     // "args": ["arg1", "arg2"],
+//         //     // "environment": [{ "name": "config", "value": "Debug" }],
+//         //     "cwd": "${workspaceFolder}",
+//         //     // "name": "Launch",
+//         //     // "type": "cppdbg",
+//         //     // "request": "launch",
+//         //     // "cwd": ".",
+//         //     "miDebuggerPath": "/opt/homebrew/bin/gdb",
+//         //     "program": "/Users/fch/Python/MiniTNtk-Extension/MiniTNtk.out",
+//         //     "args": [
+//         //         "./",
+//         //         "0",
+//         //         "100",
+//         //         "1",
+//         //         "0",
+//         //         "1",
+//         //         "1",
+//         //         "1"
+//         //     ]
+//         // }
+//     ]
+// }

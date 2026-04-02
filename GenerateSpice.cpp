@@ -150,6 +150,7 @@ vector<transistor> transformTransistors(int nClusters, int InputClusterID, int O
             // T.Gate += (Gate[0] == '-') ? Gate[1] : Gate[0];
             T.Gate = Gate;
         }
+        T.maxPathLength = transistors_Counts[transistor_ids];
         if (mos) {
             T.W = T.lambda * transistors_Counts[transistor_ids] * T.basicW;
             T.nFin = T.lambda * transistors_Counts[transistor_ids];
@@ -183,7 +184,7 @@ void TransistorsReorder(vector<transistor>& Transistors, int mos) {
     }
 }
 
-void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<transistor> transistorsPUN, vector<transistor> transistorsPDN) {
+void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<transistor> transistorsPUN, vector<transistor> transistorsPDN, map<string, int> path_statistics) {
     set<string> PinNames;
     PinNames.insert("VCC");
     PinNames.insert("GND");
@@ -196,9 +197,16 @@ void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<
     }
     ofstream f;
     f.open(file.c_str());
+    string path_statistics_str = "";
+    for (auto it : path_statistics)
+        path_statistics_str += it.first + ": " + to_string(it.second) + "; ";
+    f << "// Path statistics: " << path_statistics_str << endl;
     f << ".subckt " << CircktName << " ";
     for (auto Pin : PinNames)
         f << Pin << " ";
+    f << endl;
+    f << ".model nmos NMOS level=1 VTO=0.4 KP=120u" << endl;
+    f << ".model pmos PMOS level=1 VTO=-0.4 KP=40u" << endl;
     f << endl;
     int i = 0;
     TransistorsReorder(transistorsPUN, 1);
@@ -218,7 +226,7 @@ void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<
         f << "+ ad=0p pd=0u as=0p ps=0u" << endl;
         i++;
     }
-    f << ".ends " << CircktName << endl;
+    f << ".end" << endl;
     f.close();
 }
 

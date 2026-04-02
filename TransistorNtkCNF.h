@@ -44,6 +44,9 @@ private:
 	vector<vector<vector<string>>> ResultPaths;
 	vector<vector<int>> ResultTruthTables;
 
+	// version: 2025/6/19
+	vector<vector<vector<int>>> ResultPathIDs;
+
 	// version: 2023/5/9
 	int AccTech1Flag, AccTech2Flag; // flag1: representative patterns; flag2: pre-define transistors for existed literals of the given factored form
 
@@ -151,6 +154,18 @@ public:
 	void showResultPaths() {
 		cout << "Resulting paths are: " << endl;
 		for (auto SingleOutPaths : ResultPaths) {
+			for (auto path : SingleOutPaths) {
+				for (auto t : path)
+					cout << t << " ";
+				cout << endl;
+			}
+			cout << endl;
+		}
+	}
+
+	void showResultPathIDs() {
+		cout << "Resulting pathIDs are: " << endl;
+		for (auto SingleOutPaths : ResultPathIDs) {
 			for (auto path : SingleOutPaths) {
 				for (auto t : path)
 					cout << t << " ";

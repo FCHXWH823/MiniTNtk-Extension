@@ -1,0 +1,53 @@
+ NSP_1(5): a*b + a*c + a*d + b*c*d
+ NSP_2(5): a*b + a*c*e + d*e + d*b*c
+ NSP_3(6): e*a*b + e*a*c + e*a*d + e*b*c*d
+ NSP_4(6): e + a*b + a*c + a*d + b*c*d
+ NSP_5(6): a*e*b + a*e*c + d*a + d*b*c
+ NSP_6(6): a*b + a*d + a*c*e + b*d*c*e
+ NSP_7(6): a*b + a*c + d*e*a + d*e*b*c
+ NSP_8(6): a*b + a*c + a*d + b*c*d + b*e
+ NSP_9(6): a*b + a*c + a*d + a*e + b*c*d + b*c*e
+ NSP_10(6): a*f*b + a*f*c*e + d*b*c + d*e
+ NSP_11(6): a*b + a*c*e + f*b + f*c*e + d*b*c + d*e
+ NSP_12(6): c*f*a*e + c*f*b*d + a*b + d*e
+ NSP_13(6): c*a*e + c*b*d + f*a*e + f*b*d + a*b + d*e
+ NSP_14(7): e*f*a*b + e*f*a*c + e*f*a*d + e*f*b*c*d
+ NSP_15(7): e*a*b + e*a*c + e*a*d + e*b*c*d + f*a*b + f*a*c + f*a*d + f*b*c*d
+ NSP_16(7): e*f + e*a*b + e*a*c + e*a*d + e*b*c*d
+ NSP_17(7): e*f + a*b + a*c + a*d + b*c*d
+ NSP_18(7): e + f + a*b + a*c + a*d + b*c*d
+ NSP_19(7): f*a*e*b + f*a*e*c + f*d*a + f*d*b*c
+ NSP_20(7): f + a*e*b + a*e*c + d*a + d*b*c
+ NSP_21(7): f*c*e*a + f*c*e*b*d + f*a*b + f*a*d
+ NSP_22(7): f + c*e*a + c*e*b*d + a*b + a*d
+ NSP_23(7): a*e*f*b + a*e*f*c + d*a + d*b*c
+ NSP_24(7): d*a + d*b*c + a*b + a*c + e*b + f*b + f*c*a + e*c*a
+ NSP_25(7): a*e*b + a*e*c + a*f*b + a*f*c + d*a + d*b*c
+ NSP_26(7): d*b*c + a*b + a*c + d*a + e*f*b + e*f*c*a
+ NSP_27(7): c*e*f*a + c*e*f*b*d + a*b + a*d
+ NSP_28(7): c*a + c*b*d + e*a + e*b*d + f*a + f*b*d + a*b + a*d
+ NSP_29(7): c*e*a + c*e*b*d + c*f*a + c*f*b*d + a*b + a*d
+ NSP_30(7): c*a + c*b*d + e*f*a + e*f*b*d + a*b + a*d
+ NSP_31(7): a*e*b + a*e*c*f + d*a + d*b*c*f
+ NSP_32(7): d*b*c*f + a*b + d*a + a*c*f + e*b + e*c*f*a
+ NSP_33(7): a*e*b + a*e*c + a*e*f + d*a + d*b*c + d*b*f
+ NSP_34(7): a*b + a*c + a*f + e*b*a + e*c + e*f + d*a + d*b*c + d*b*f
+ NSP_35(7): a*e*b + a*e*c + d*f*a + d*f*b*c
+ NSP_36(7): a*b + a*c + e*b*a + e*c + d*f*a + d*f*b*c
+ NSP_37(7): a*e*b + a*e*c + d*a + d*b*c + f*a + f*b*c
+ NSP_38(7): a*b + a*c + e*b*a + e*c + d*a + d*b*c + f*a + f*b*c
+ NSP_39(7): a*e*b*f + a*e*c + d*a + d*b*c*f
+ NSP_40(7): a*b*f + a*c + e*b*f*a + e*c + d*a + d*b*c*f
+ NSP_41(7): a*e*b + a*e*f + a*e*c + d*a + d*c*b + d*c*f
+ NSP_42(7): a*f + a*b + e*f + d*a + e*c*a + d*c*f + d*c*b + a*c + e*b
+ NSP_43(7): a*e*b + a*e*c*f + d*a*f + d*b*c
+ NSP_44(7): a*b + a*c*f + e*c*f + d*a*f + d*b*c
+ NSP_45(7): a*e*b + a*e*c + a*e*c*f + d*a + d*f + d*b*c
+ NSP_46(7): a*d + a*b + a*c + b*c*d + b*e + d*f + c*e*f + a*c*f
+ NSP_47(7): a*b*e + a*c + d*f*a + d*f*c*b*e
+ NSP_48(7): a*b + a*e + a*c + d*f*a + d*f*c*b + d*f*c*e
+ NSP_49(7): a*b*e + a*c + d*a + d*c*b*e + f*a + f*c*b*e
+ NSP_50(7): a*b + a*e + a*c + d*a + d*c*b + d*c*e + f*a + f*c*b + f*c*e
+ NSP_51(7): a*b*e + a*c*f + d*a + d*b*c*e*f
+ NSP_52(7): a*b + a*e + a*c*f + d*a + d*c*f*b + d*c*f*e
+ NSP_53(7): a*b + a*e + a*c + a*f + d*a + d*c*b + d*c*e + d*f*b + d*f*e

@@ -1,0 +1,50 @@
+strict graph "./MuSTNet/Transistors_361PDN" {
+  "!c2" [ shape = "polygon" ]
+  "c2" [ shape = "polygon" ]
+  "!c1" [ shape = "polygon" ]
+  "!b1" [ shape = "polygon" ]
+  "!a1" [ shape = "polygon" ]
+  "d1" [ shape = "polygon" ]
+  "c1" [ shape = "polygon" ]
+  "b1" [ shape = "polygon" ]
+  "a1" [ shape = "polygon" ]
+  "19"
+  "18"
+  "17"
+  "16"
+  "15"
+  "14"
+  "13"
+  "12"
+  "11"
+  "10"
+  "9"
+  "8"
+  "7"
+  "6"
+  "5" [ color = "red" ]
+  "4"
+  "3"
+  "2"
+  "1"
+  "0"
+  "!c2" -- "0"
+  "!c2" -- "2"
+  "c2" -- "0"
+  "c2" -- "1"
+  "!c1" -- "5"
+  "!c1" -- "4"
+  "!b1" -- "1"
+  "!b1" -- "4"
+  "!a1" -- "4"
+  "!a1" -- "3"
+  "d1" -- "1"
+  "d1" -- "5"
+  "c1" -- "5"
+  "c1" -- "3"
+  "b1" -- "2"
+  "b1" -- "3"
+  "a1" -- "2"
+  "a1" -- "1"
+}
+

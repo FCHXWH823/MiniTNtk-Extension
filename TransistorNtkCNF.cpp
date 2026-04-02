@@ -94,22 +94,42 @@ void MultiOutTransistorCNF::MultiOutCreateClauses(vector<int> Tran2InputVars) {
 	}
 }
 
+//void MultiOutTransistorCNF::MultiOutInputParser(vector<string> BoolFuncs, string dir) {
+//	vector<string> posFuncs, negFuncs;
+//	for (auto boolfunc : BoolFuncs) {
+//		// preprocess
+//		removeSpace(boolfunc);
+//		posFuncs.push_back(boolfunc);
+//		cout << "On-Func: " << boolfunc << endl;
+//		ofstream f1;
+//		f1.open(dir + "NegFunc.eqn");
+//		f1 << "Func=!(" << boolfunc << ");" << endl;
+//		f1.close();
+//		system((string("sis -c \"read_eqn ") + dir + string("NegFunc.eqn;simplify;write_eqn ") + dir + string("NegFunc_out.eqn;\"")).c_str());
+//		negFuncs.push_back(ParseEqn(dir + "NegFunc_out.eqn"));
+//		cout << "Off-Func: " << *(negFuncs.end() - 1) << endl;
+//	}
+//	
+//	MultiOutInputParser(posFuncs, negFuncs);
+//}
+
 void MultiOutTransistorCNF::MultiOutInputParser(vector<string> BoolFuncs, string dir) {
 	vector<string> posFuncs, negFuncs;
+	(void)dir;
 	for (auto boolfunc : BoolFuncs) {
 		// preprocess
 		removeSpace(boolfunc);
 		posFuncs.push_back(boolfunc);
 		cout << "On-Func: " << boolfunc << endl;
 		ofstream f1;
-		f1.open(dir + "NegFunc.eqn");
-		f1 << "Func=!(" << boolfunc << ");" << endl;
+		f1.open("NegFunc.eqn");
+		f1 << boolfunc;
 		f1.close();
-		system((string("sis -c \"read_eqn ") + dir + string("NegFunc.eqn;simplify;write_eqn ") + dir + string("NegFunc_out.eqn;\"")).c_str());
-		negFuncs.push_back(ParseEqn(dir + "NegFunc_out.eqn"));
+		system("python sis.py NegFunc.eqn;");
+		negFuncs.push_back(ParseEqn("NegFunc_out.eqn"));
 		cout << "Off-Func: " << *(negFuncs.end() - 1) << endl;
 	}
-	
+
 	MultiOutInputParser(posFuncs, negFuncs);
 }
 
@@ -1607,6 +1627,7 @@ vector<string> TransistorCNF::ParseCnf(int mos, vector<transistor>& Transistors,
 
 	map<pair<int, int>, string> transistors_new;
 	vector<pair<pair<int, int>, string>> transistors_pairs;
+	vector<pair<int, string>> dropped_transistors; // (cluster_id, gate_literal)
 	for (auto it : transistors) {
 		int id1 = it.first.first;
 		int id2 = it.first.second;
@@ -1623,10 +1644,50 @@ vector<string> TransistorCNF::ParseCnf(int mos, vector<transistor>& Transistors,
 			Literals.push_back(it.second);
 			transistors_pairs.push_back(make_pair(make_pair(id1_new, id2_new), it.second));
 		}
+		else {
+			cout << "[Debug] Degenerate transistor dropped: gate=" << it.second
+			     << " orig_ports=(" << id1 << "," << id2 << ")"
+			     << " -> same cluster " << id1_new << endl;
+			dropped_transistors.push_back(make_pair(id1_new, it.second));
+		}
 			
 
 		transistors_new[make_pair(id1_new, id2_new)] = it.second;
 		// transistors_pairs.push_back(make_pair(make_pair(id1_new, id2_new), it.second));
+	}
+
+	// Print the converted graph in CG format for comparison with other methods
+	if (SatResult) {
+		cout << "CG(nc=" << clusters.size() << ", r=" << transistors_pairs.size() << ", tr=[";
+		for (int i = 0; i < (int)transistors_pairs.size(); i++) {
+			int c1 = transistors_pairs[i].first.first;
+			int c2 = transistors_pairs[i].first.second;
+			const string& lit = transistors_pairs[i].second;
+			int litIdx;
+			if (lit[0] == '!')
+				litIdx = nInputs + (int)(svars.find(lit[1]));
+			else
+				litIdx = (int)(svars.find(lit[0]));
+			cout << "(" << c1 << ", " << c2 << ", " << litIdx << ")";
+			if (i + 1 < (int)transistors_pairs.size()) cout << ", ";
+		}
+		cout << "]";
+		if (!dropped_transistors.empty()) {
+			cout << ", dropped=[";
+			for (int i = 0; i < (int)dropped_transistors.size(); i++) {
+				int node = dropped_transistors[i].first;
+				const string& lit = dropped_transistors[i].second;
+				int litIdx;
+				if (lit[0] == '!')
+					litIdx = nInputs + (int)(svars.find(lit[1]));
+				else
+					litIdx = (int)(svars.find(lit[0]));
+				cout << "(" << node << ", " << litIdx << ")";
+				if (i + 1 < (int)dropped_transistors.size()) cout << ", ";
+			}
+			cout << "]";
+		}
+		cout << ")" << endl;
 	}
 
 	// version:2023/3/22
@@ -1665,8 +1726,10 @@ vector<string> TransistorCNF::ParseCnf(int mos, vector<transistor>& Transistors,
 		graph[clusters.size() + i].push_back(Edge.first.second);
 	}
 	ResultPaths = {};
+	ResultPathIDs = {};
 	for (auto OutClusterID : OutClusters) {
 		ResultPaths.push_back(getSimpleTransistorPaths(graph, InputClusterID, OutClusterID, transistorNodes));
+		ResultPathIDs.push_back(getSimpleTransistorIDPaths(graph, InputClusterID, OutClusterID, transistorNodes));
 	}
 
 	//version: 2023/6/5
@@ -1854,8 +1917,7 @@ vector<string> TransistorCNF::ParseCnf(string cnfpath, map<pair<int, int>, int>&
 		}
 	}
 	// version: 2023/4/6
-	// DrawAbstractedGraph(path + "Transistors_" + TNtk.NtkName, transistors_new, {}, OutClusters);
-	DrawAbstractedGraph(path + "Transistors_" + TNtk.NtkName, transistors_pairs, {}, OutClusters);
+	// DrawAbstractedGraph(path + "Transistors_" + TNtk.NtkName, transistors_pairs, {}, OutClusters);
 	return Literals;
 }
 
@@ -2156,6 +2218,8 @@ string ParseEqn(string EqnPath) {
 	ifstream f1;
 	string Func;
 	f1.open(EqnPath.c_str());
+	if (!f1.is_open())
+		return "";
 	string line;
 	int flag = 0;
 	while (getline(f1, line)) {
@@ -2170,8 +2234,8 @@ string ParseEqn(string EqnPath) {
 	}
 	f1.close();
 	removeSpace(Func);
-	// version: 2023/3/29
-	Func.erase(Func.end() - 1);
+	if (!Func.empty())
+		Func.erase(Func.end() - 1);
 	return Func;
 }
 
@@ -2197,17 +2261,20 @@ void ParseBoolFuncTxtFile(string TxtPath, map<string, pair<string, int>>& BoolFu
 	string sline;
 	f1.open(TxtPath.c_str());
 	while (getline(f1,sline)) {
+		if (sline == "")
+			continue;
 		if (sline[0] == '#')
 			continue;
-		if (sline != "") {
-			vector<string> FuncInfo = split(sline, ':');
-			string FuncName = split(FuncInfo[0], '(')[0];
-			stringstream ss;
-			int nTransistors;
-			ss << split(split(FuncInfo[0], '(')[1], ')')[0];
-			ss >> nTransistors;
-			BoolFuncs[FuncName] = make_pair(FuncInfo[1], nTransistors);
-		}
+		vector<string> FuncInfo = split(sline, ':');
+		string FuncName = split(FuncInfo[0], '(')[0];
+		// trim leading/trailing whitespace from FuncName
+		FuncName.erase(0, FuncName.find_first_not_of(" \t\r\n"));
+		FuncName.erase(FuncName.find_last_not_of(" \t\r\n") + 1);
+		stringstream ss;
+		int nTransistors;
+		ss << split(split(FuncInfo[0], '(')[1], ')')[0];
+		ss >> nTransistors;
+		BoolFuncs[FuncName] = make_pair(FuncInfo[1], nTransistors);
 	}
 	f1.close();
 }

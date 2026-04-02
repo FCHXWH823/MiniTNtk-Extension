@@ -8,6 +8,7 @@
 #include "TransistorNtkCNF.h"
 #include "PathLimitation.h"
 #include "GenerateSpice.h"
+#include "MuSTNet/MustNetCNF.h"
 #include <set>
 using namespace std;
 // nTransistors: the number of transistors in the initial exact synthesis round
@@ -64,7 +65,7 @@ using namespace std;
 //				TMultiCnfTmp.MultiOutCreateClauses(Tran2InputVarsTmp);
 //				TMultiCnfTmp.GetAllClauses();
 //				TMultiCnfTmp.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
-//				system(("timeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+//				system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 //				// system(("minisat ./" + TMultiOutNtk.NtkName + ".cnf ./" + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 //				Tran2InputVarsTmp = TMultiCnfTmp.ParseCnf(dir + TMultiOutNtk.NtkName + "_out.cnf", dir);
 //				// TMultiCnfTmp.ParseCnf("./" + TMultiOutNtk.NtkName + "_out.cnf");
@@ -80,7 +81,7 @@ using namespace std;
 //			TMultiCnf.MultiOutCreateClauses(Tran2InputVars);
 //			TMultiCnf.GetAllClauses();
 //			TMultiCnf.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
-//			system(("timeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+//			system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 //			Tran2InputVars = TMultiCnf.ParseCnf(dir + TMultiOutNtk.NtkName + "_out.cnf", dir);
 //			if (TMultiCnf.GetSatResult()) {
 //				SatFlag = 1;
@@ -95,6 +96,28 @@ using namespace std;
 // nTransistors: the number of transistors in the initial exact synthesis round
 // nPreSetTransistors: the number of pre-determined transistors in each exact synthesis round
 // vPreSetTransistors: the patterns of how to set the remaining transistors' corresponding literals
+
+static void DebugTruthTables(const string& label,
+	const vector<vector<int>>& targetTt,
+	const vector<vector<int>>& resultTt) {
+	bool match = (targetTt == resultTt);
+	cout << "[TT-Check] " << label << ": " << (match ? "MATCH" : "MISMATCH") << endl;
+	if (!match) {
+		for (int out = 0; out < (int)targetTt.size(); out++) {
+			cout << "  Output " << out << ":" << endl;
+			cout << "    Target : ";
+			for (int v : targetTt[out]) cout << v;
+			cout << endl;
+			cout << "    Synth  : ";
+			for (int v : resultTt[out]) cout << v;
+			cout << endl;
+			cout << "    Diff   : ";
+			for (int i = 0; i < (int)targetTt[out].size(); i++)
+				cout << (targetTt[out][i] != resultTt[out][i] ? "^" : ".");
+			cout << endl;
+		}
+	}
+}
 
 pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string FuncName, vector<string> Funcs, int nTransistors,
 	vector<transistor>& Transistors, int mos, int INVOUT, 
@@ -155,7 +178,7 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 				TMultiCnfTmp.MultiOutCreateClauses(Tran2InputVarsTmp);
 				TMultiCnfTmp.GetAllClauses();
 				TMultiCnfTmp.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
-				system(("timeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+				system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 				// system(("minisat ./" + TMultiOutNtk.NtkName + ".cnf ./" + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 				Literals = TMultiCnfTmp.ParseCnf(mos, Transistors, INVOUT, dir + TMultiOutNtk.NtkName + "_out.cnf", dir);
 				// TMultiCnfTmp.ParseCnf("./" + TMultiOutNtk.NtkName + "_out.cnf");
@@ -180,14 +203,25 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 			TMultiCnf.MultiOutCreateClauses(Tran2InputVars);
 			TMultiCnf.GetAllClauses();
 			TMultiCnf.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
-			system(("timeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+			system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 			Literals = TMultiCnf.ParseCnf(mos, Transistors, INVOUT, dir + TMultiOutNtk.NtkName + "_out.cnf", dir);
 			if (TMultiCnf.GetSatResult()) {
+				// Verify the synthesized network immediately after ParseCnf, which has
+				// already removed any degenerate (short-connected) transistors from ResultPaths.
+				// ActualTt = target function truth table (from Onsets/CNF formulation)
+				// ResultTt = truth table derived from the actual switching paths
+				{
+					vector<vector<int>> ActualTt = TMultiCnf.DeriveEachCnfTruthTable();
+					vector<vector<int>> ResultTt = TMultiCnf.DeriveResultFunc();
+					DebugTruthTables(TMultiOutNtk.NtkName + "[post-drop]", ActualTt, ResultTt);
+				}
 				if (!DepthLimited) {
 					SatFlag = 1;
 					vector<vector<int>> ActualTt = TMultiCnf.DeriveEachCnfTruthTable();
 					vector<vector<int>> ResultTt = TMultiCnf.DeriveResultFunc();
 					TMultiCnf.showResultPaths();
+					TMultiCnf.showResultPathIDs();
+					DebugTruthTables(TMultiOutNtk.NtkName, ActualTt, ResultTt);
 					if (ActualTt == ResultTt)
 						TMultiCnf.SetExact(1);
 					else
@@ -199,6 +233,8 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 					vector<vector<int>> ActualTt = TMultiCnf.DeriveEachCnfTruthTable();
 					vector<vector<int>> ResultTt = TMultiCnf.DeriveResultFunc();
 					TMultiCnf.showResultPaths();
+					TMultiCnf.showResultPathIDs();
+					DebugTruthTables(TMultiOutNtk.NtkName + "(iter" + to_string(AddBlockConstraintsTimes) + ")", ActualTt, ResultTt);
 					if (ActualTt == ResultTt)
 						TMultiCnf.SetExact(1);
 					else
@@ -206,7 +242,7 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 					if(TMultiCnf.GetIsDepthLimited())
 						return make_pair(Literals, make_pair(TMultiCnf.GetExact(), (DepthLimited) ? TMultiCnf.GetIsDepthLimited() : 1));
 					TMultiCnf.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
-					system(("timeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+					system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 					Literals = TMultiCnf.ParseCnf(mos, Transistors, INVOUT, dir + TMultiOutNtk.NtkName + "_out.cnf", dir);
 					AddBlockConstraintsTimes++;
 				}
@@ -271,7 +307,7 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 //				TMultiCnfTmp.MultiOutCreateClauses(Tran2InputVarsTmp);
 //				TMultiCnfTmp.GetAllClauses();
 //				TMultiCnfTmp.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
-//				system(("timeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+//				system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 //				// system(("minisat ./" + TMultiOutNtk.NtkName + ".cnf ./" + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 //				Literals = TMultiCnfTmp.ParseCnf(dir + TMultiOutNtk.NtkName + "_out.cnf", dir);
 //				// TMultiCnfTmp.ParseCnf("./" + TMultiOutNtk.NtkName + "_out.cnf");
@@ -288,7 +324,7 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 //			TMultiCnf.MultiOutCreateClauses(Tran2InputVars);
 //			TMultiCnf.GetAllClauses();
 //			TMultiCnf.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
-//			system(("timeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+//			system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 //			map<pair<int, int>, int> AllEdges;
 //			map<pair<int, int>, string> transistors;
 //			map<pair<int, int>, int> transistors_cnfvars;
@@ -306,7 +342,7 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 //						for (auto clause : PathLimitedClauses)
 //							TMultiCnf.AddClause(clause);
 //						TMultiCnf.WriteCnf(dir + TMultiOutNtk.NtkName + ".cnf");
-//						system(("timeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+//						system(("gtimeout " + to_string(timeBound) + " minisat " + dir + TMultiOutNtk.NtkName + ".cnf " + dir + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 //						AllEdges.clear();
 //						transistors.clear();
 //						transistors_cnfvars.clear();
@@ -322,6 +358,58 @@ pair<vector<string>, pair<int, int>> TransistorExactSynthesis(string dir, string
 //}
 
 
+// 2025/3/1
+//pair<vector<string>, int> InputNeg(vector<string> Funcs, string dir = "") {
+//	vector<string> InputNegFuncs;
+//	set<string> Literals;
+//	for (auto Func : Funcs) {
+//		removeSpace(Func);
+//		// cout << "Initial Func: " << Func << endl;
+//		ofstream f1;
+//		f1.open(dir + "NegFunc.eqn");
+//		f1 << "Func=!(" << Func << ");" << endl;
+//		f1.close();
+//		system((string("sis -c \"read_eqn ") + dir + string("NegFunc.eqn;simplify;write_eqn ") + dir + string("NegFunc_out.eqn;\"")).c_str());
+//		string NegFunc = ParseEqn(dir + "NegFunc_out.eqn");
+//		// cout << "Neg Func: " << NegFunc << endl;
+//		vector<string> Products = (NegFunc.size()) ? split(NegFunc, '+') : vector<string>{};
+//		vector<vector<string>> vProducts;
+//		// derive the sum of products for onset and offset
+//		for (auto s : Products)
+//			vProducts.push_back(split(s, '*'));
+//		for (int i = 0; i < vProducts.size(); i++) {
+//			for (int j = 0; j < vProducts[i].size(); j++) {
+//				if (vProducts[i][j][0] == '!')
+//					vProducts[i][j].erase(vProducts[i][j].begin());
+//				else
+//					vProducts[i][j] = "!" + vProducts[i][j];
+//			}
+//		}
+//		// get the number of literals
+//		for (auto product : vProducts)
+//			for (auto literal : product)
+//				Literals.insert(literal);
+//
+//		// recombine products
+//		NegFunc = "";
+//		for (int i = 0; i < vProducts.size(); i++) {
+//			string product = vProducts[i][0];
+//			for (int j = 1; j < vProducts[i].size(); j++) {
+//				product += "*";
+//				product += vProducts[i][j];
+//			}
+//			if (i)
+//				NegFunc += "+";
+//			NegFunc += product;
+//		}
+//
+//		InputNegFuncs.push_back(NegFunc);
+//		// cout << "Input neg: " << NegFunc << endl;
+//	}
+//	return make_pair(InputNegFuncs, Literals.size());
+//}
+//
+
 pair<vector<string>, int> InputNeg(vector<string> Funcs, string dir = "") {
 	vector<string> InputNegFuncs;
 	set<string> Literals;
@@ -329,11 +417,11 @@ pair<vector<string>, int> InputNeg(vector<string> Funcs, string dir = "") {
 		removeSpace(Func);
 		// cout << "Initial Func: " << Func << endl;
 		ofstream f1;
-		f1.open(dir + "NegFunc.eqn");
-		f1 << "Func=!(" << Func << ");" << endl;
+		f1.open("NegFunc.eqn");
+		f1 << Func;
 		f1.close();
-		system((string("sis -c \"read_eqn ") + dir + string("NegFunc.eqn;simplify;write_eqn ") + dir + string("NegFunc_out.eqn;\"")).c_str());
-		string NegFunc = ParseEqn(dir + "NegFunc_out.eqn");
+		system("python sis.py NegFunc.eqn");
+		string NegFunc = ParseEqn("NegFunc_out.eqn");
 		// cout << "Neg Func: " << NegFunc << endl;
 		vector<string> Products = (NegFunc.size()) ? split(NegFunc, '+') : vector<string>{};
 		vector<vector<string>> vProducts;
@@ -382,11 +470,17 @@ int main(int argc, char* argv[]) {
 		cout << "argv[6]: count the transistors of input inverters (=1);" << endl;
 		cout << "argv[7]: acceleration technique 1: representative patterns;" << endl;
 		cout << "argv[8]: acceleration technique 2: pre-defined transistors for existed literals in a given Boolean function." << endl;
+		cout << "argv[9]: path of generated .sp file." << endl;
+		cout << "argv[10]: use MuSTNet mode (=1)." << endl;
+		cout << "argv[11]: enable placement constraints in MuSTNet (=1)." << endl;
 		return 0;
 	}
 	int OnlyPDNFlag = atoi(argv[4]);
 	int DepthLimited = atoi(argv[5]);
 	int CountInputINV = atoi(argv[6]);
+	string spicepath = string(argv[9]);
+	int useMustNet = (argc > 10) ? atoi(argv[10]) : 0;
+	int placementFlag = (argc > 11) ? atoi(argv[11]) : 0;
 	int AccFlag1 = 1;
 	int AccFlag2 = 1;
 	map<string, pair<string, int>> BoolFuncs;
@@ -419,7 +513,11 @@ int main(int argc, char* argv[]) {
 		// version: 2023/6/5
 		vector<transistor> transistors_PDN, transistors_PUN;
 		// pair<vector<int>, pair<int,int>> Tran2InputVarsandnVars = TransistorExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, atoi(argv[3]), atoi(argv[2]));
-		LiteralsPDN = TransistorExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
+		if (useMustNet) {
+			LiteralsPDN = MustNetExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], atoi(argv[3]), DepthLimited, AccFlag1, AccFlag2, placementFlag);
+		} else {
+			LiteralsPDN = TransistorExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
+		}
 		// version: 2023/4/29
 		SAT *= LiteralsPDN.second.first;
 		SATDepthLimited *= LiteralsPDN.second.second;
@@ -431,7 +529,11 @@ int main(int argc, char* argv[]) {
 		// pair<vector<int>, pair<int, int>> Tran2InputVarsPUNandnVars = TransistorExactSynthesis(argv[1], FuncName + "PUN", InputNeg(Funcs), Tran2InputVars.size(), atoi(argv[3]), Tran2InputVars.size() - nInitTransistors, { vPreSetTransistors });
 		if (!OnlyPDNFlag) {
 			pair<vector<string>, int> InputNegFuncs = InputNeg(Funcs, argv[1]);
-			LiteralsPUN = TransistorExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
+			if (useMustNet) {
+				LiteralsPUN = MustNetExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], atoi(argv[3]), DepthLimited, AccFlag1, AccFlag2, placementFlag);
+			} else {
+				LiteralsPUN = TransistorExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
+			}
 			SAT *= LiteralsPUN.second.first;
 			SATDepthLimited *= LiteralsPUN.second.second;
 		}
@@ -445,10 +547,24 @@ int main(int argc, char* argv[]) {
 			LiteralsAll.insert(literal);
 		// version:2023/6/5
 		GenerateTransistors(LiteralsAll, transistors_PUN, transistors_PDN, OutInvFlags[0]);
+
+		// summarize the path statistics of each transistor
+		map<string, int> PathStatistics;
+		for (auto literal : LiteralsAll)
+			PathStatistics[literal] = 0;
+		for (auto transistor : transistors_PDN)
+			PathStatistics[transistor.Gate] += transistor.maxPathLength;
+		for (auto transistor : transistors_PUN)
+			PathStatistics[transistor.Gate] += transistor.maxPathLength;
+
 		string spiceName = FuncName;
+		if (DepthLimited)
+			spiceName += "_DepthLimited";
+		if (useMustNet)
+			spiceName += "_MuSTNet";
 		for (int c = 0; c < Funcs.size(); c++)
 			spiceName.erase(spiceName.begin());
-		writeSpice(spiceName + ".sp", spiceName, LiteralsAll, transistors_PUN, transistors_PDN);
+		writeSpice(spicepath + spiceName + ".sp", spiceName, LiteralsAll, transistors_PUN, transistors_PDN, PathStatistics);
 		// version: 2023/4/29
 		// remove the first characters '!', ' '
 		for (int i = 0; i < Funcs.size(); i++)
@@ -457,7 +573,7 @@ int main(int argc, char* argv[]) {
 			if (DepthLimited)
 				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
 			else
-				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
+ 				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
 			cout << "Total transistors: " << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << endl;
 		}	
 		else {
@@ -530,7 +646,7 @@ int main(int argc, char* argv[]) {
 		//			TMultiCnf.MultiOutCreateClauses(Tran2InputVars);
 		//			TMultiCnf.GetAllClauses();
 		//			TMultiCnf.WriteCnf(argv[1] + TMultiOutNtk.NtkName + ".cnf");
-		//			system(("timeout 3600 minisat " + string(argv[1]) + TMultiOutNtk.NtkName + ".cnf " + string(argv[1]) + TMultiOutNtk.NtkName + "_out.cnf").c_str());
+		//			system(("gtimeout 3600 minisat " + string(argv[1]) + TMultiOutNtk.NtkName + ".cnf " + string(argv[1]) + TMultiOutNtk.NtkName + "_out.cnf").c_str());
 		//			TMultiCnf.ParseCnf(argv[1] + TMultiOutNtk.NtkName + "_out.cnf", argv[1]);
 		//			if (TMultiCnf.GetSatResult()) {
 		//				SatFlag = 1;
@@ -549,6 +665,6 @@ int main(int argc, char* argv[]) {
 	}
 
 
-	
+	// system("pause");
 	return 0;
 }

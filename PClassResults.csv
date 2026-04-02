@@ -1,0 +1,2 @@
+Boolean Func,#Transistors,Runtime(ms),SatResult,DepthLimited
+361,26,255214,SAT,1
