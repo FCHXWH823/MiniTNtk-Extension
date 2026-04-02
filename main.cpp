@@ -5,6 +5,7 @@
 #include <cmath>
 #include <chrono>
 #include <cstdio>
+#include "argparse.hpp"
 #include "TransistorNtk.h"
 #include "TransistorNtkCNF.h"
 #include "PathLimitation.h"
@@ -466,37 +467,103 @@ pair<vector<string>, int> InputNeg(vector<string> Funcs, string dir = "") {
 }
 
 int main(int argc, char* argv[]) {
-	if (string(argv[1]) == "--help") {
-		cout << "argv[1]: path of Booleans.txt;" << endl;
-		cout << "argv[2]: number of pre-defined transistors;" << endl;
-		cout << "argv[3]: runtime bound of SAT solving;" << endl;
-		cout << "argv[4]: only solving PDN (=1);" << endl;
-		cout << "argv[5]: limit the number of transistors in series (=1);" << endl;
-		cout << "argv[6]: count the transistors of input inverters (=1);" << endl;
-		cout << "argv[7]: acceleration technique 1: representative patterns;" << endl;
-		cout << "argv[8]: acceleration technique 2: pre-defined transistors for existed literals in a given Boolean function." << endl;
-		cout << "argv[9]: path of generated .sp file." << endl;
-		cout << "argv[10]: use MuSTNet mode (=1)." << endl;
-		cout << "argv[11]: enable placement constraints in MuSTNet (=1)." << endl;
-		return 0;
+	argparse::ArgumentParser program("MiniTNtk", "1.0");
+
+	program.add_argument("--dir")
+		.help("path of Booleans.txt (default: ./)")
+		.default_value(string("./"));
+	program.add_argument("--preset")
+		.help("number of pre-defined transistors (default: 0)")
+		.default_value(0)
+		.scan<'i', int>();
+	program.add_argument("--timeout")
+		.help("runtime bound of SAT solving in seconds (default: 3600)")
+		.default_value(3600)
+		.scan<'i', int>();
+	program.add_argument("--pdn-only")
+		.help("only solve PDN (default: false)")
+		.default_value(false)
+		.implicit_value(true);
+	program.add_argument("--depth-limited")
+		.help("limit the number of transistors in series (default: false)")
+		.default_value(false)
+		.implicit_value(true);
+	program.add_argument("--count-inv")
+		.help("count transistors of input inverters (default: true)")
+		.default_value(true)
+		.implicit_value(true);
+	program.add_argument("--no-count-inv")
+		.help("do not count transistors of input inverters (default: false)")
+		.default_value(false)
+		.implicit_value(true);
+	program.add_argument("--acc1")
+		.help("acceleration: representative patterns (default: true)")
+		.default_value(true)
+		.implicit_value(true);
+	program.add_argument("--no-acc1")
+		.help("disable acceleration technique 1 (default: false)")
+		.default_value(false)
+		.implicit_value(true);
+	program.add_argument("--acc2")
+		.help("acceleration: pre-defined transistors for existing literals (default: true)")
+		.default_value(true)
+		.implicit_value(true);
+	program.add_argument("--no-acc2")
+		.help("disable acceleration technique 2 (default: false)")
+		.default_value(false)
+		.implicit_value(true);
+	program.add_argument("--spice-dir")
+		.help("path for generated .sp files (default: ./out/)")
+		.default_value(string("./out/"));
+	program.add_argument("--mustnet")
+		.help("use MuSTNet mode (default: false)")
+		.default_value(false)
+		.implicit_value(true);
+	program.add_argument("--placement")
+		.help("enable placement constraints in MuSTNet (default: false)")
+		.default_value(false)
+		.implicit_value(true);
+	program.add_argument("--csv")
+		.help("path of output result CSV file (default: {dir}/PClassResults.csv)")
+		.default_value(string(""));
+
+	try {
+		program.parse_args(argc, argv);
+	} catch (const std::exception& err) {
+		cerr << err.what() << endl;
+		cerr << program;
+		return 1;
 	}
-	int OnlyPDNFlag = atoi(argv[4]);
-	int DepthLimited = atoi(argv[5]);
-	int CountInputINV = atoi(argv[6]);
-	string spicepath = string(argv[9]);
-	int useMustNet = (argc > 10) ? atoi(argv[10]) : 0;
-	int placementFlag = (argc > 11) ? atoi(argv[11]) : 0;
-	int AccFlag1 = 1;
-	int AccFlag2 = 1;
+
+	string dir = program.get<string>("--dir");
+	// Ensure dir ends with /
+	if (!dir.empty() && dir.back() != '/')
+		dir += '/';
+
+	int OnlyPDNFlag = program.get<bool>("--pdn-only") ? 1 : 0;
+	int DepthLimited = program.get<bool>("--depth-limited") ? 1 : 0;
+	int CountInputINV = program.get<bool>("--no-count-inv") ? 0 : (program.get<bool>("--count-inv") ? 1 : 1);
+	string spicepath = program.get<string>("--spice-dir");
+	if (!spicepath.empty() && spicepath.back() != '/')
+		spicepath += '/';
+	int useMustNet = program.get<bool>("--mustnet") ? 1 : 0;
+	int placementFlag = program.get<bool>("--placement") ? 1 : 0;
+	string csvPath = program.get<string>("--csv");
+	if (csvPath.empty())
+		csvPath = dir + "PClassResults.csv";
+	int AccFlag1 = program.get<bool>("--no-acc1") ? 0 : 1;
+	int AccFlag2 = program.get<bool>("--no-acc2") ? 0 : 1;
+	int nPreSetTransistors = program.get<int>("--preset");
+	int timeBound = program.get<int>("--timeout");
 	map<string, pair<string, int>> BoolFuncs;
-	ParseBoolFuncTxtFile(argv[1]+string("Booleans.txt"), BoolFuncs);
+	ParseBoolFuncTxtFile(dir+string("Booleans.txt"), BoolFuncs);
 
 	ofstream fExcel;
-	fExcel.open(argv[1] + string("PClassResults.csv"));
+	fExcel.open(csvPath);
 	if (DepthLimited)
-		fExcel << "Boolean Func,#Transistors,PDN-CG,PUN-CG,Runtime(ms),SatResult,DepthLimited" << endl;
+		fExcel << "Boolean Func,#Transistors,#Transistors_PDN,#Transistors_PUN,PDN-CG,PUN-CG,Runtime(ms),SatResult,DepthLimited" << endl;
 	else
-		fExcel << "Boolean Func,#Transistors,PDN-CG,PUN-CG,Runtime(ms),SatResult" << endl;
+		fExcel << "Boolean Func,#Transistors,#Transistors_PDN,#Transistors_PUN,PDN-CG,PUN-CG,Runtime(ms),SatResult" << endl;
 	for (auto it = BoolFuncs.begin(); it != BoolFuncs.end(); it++) {
 		string FuncName = (*it).first;
 		vector<string> Funcs = split((*it).second.first, '|');
@@ -520,9 +587,9 @@ int main(int argc, char* argv[]) {
 		string cgStringPDN, cgStringPUN;
 		// pair<vector<int>, pair<int,int>> Tran2InputVarsandnVars = TransistorExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, atoi(argv[3]), atoi(argv[2]));
 		if (useMustNet) {
-			LiteralsPDN = MustNetExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], cgStringPDN, atoi(argv[3]), DepthLimited, AccFlag1, AccFlag2, placementFlag);
+			LiteralsPDN = MustNetExactSynthesis(dir, FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], cgStringPDN, timeBound, DepthLimited, AccFlag1, AccFlag2, placementFlag);
 		} else {
-			LiteralsPDN = TransistorExactSynthesis(argv[1], FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], cgStringPDN, atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
+			LiteralsPDN = TransistorExactSynthesis(dir, FuncName + "PDN", Funcs, nTransistors, transistors_PDN, 0, OutInvFlags[0], cgStringPDN, timeBound, nPreSetTransistors, DepthLimited, AccFlag1, AccFlag2);
 		}
 		// version: 2023/4/29
 		SAT *= LiteralsPDN.second.first;
@@ -534,11 +601,11 @@ int main(int argc, char* argv[]) {
 		
 		// pair<vector<int>, pair<int, int>> Tran2InputVarsPUNandnVars = TransistorExactSynthesis(argv[1], FuncName + "PUN", InputNeg(Funcs), Tran2InputVars.size(), atoi(argv[3]), Tran2InputVars.size() - nInitTransistors, { vPreSetTransistors });
 		if (!OnlyPDNFlag) {
-			pair<vector<string>, int> InputNegFuncs = InputNeg(Funcs, argv[1]);
+			pair<vector<string>, int> InputNegFuncs = InputNeg(Funcs, dir);
 			if (useMustNet) {
-				LiteralsPUN = MustNetExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], cgStringPUN, atoi(argv[3]), DepthLimited, AccFlag1, AccFlag2, placementFlag);
+				LiteralsPUN = MustNetExactSynthesis(dir, FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], cgStringPUN, timeBound, DepthLimited, AccFlag1, AccFlag2, placementFlag);
 			} else {
-				LiteralsPUN = TransistorExactSynthesis(argv[1], FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], cgStringPUN, atoi(argv[3]), atoi(argv[2]), DepthLimited, AccFlag1, AccFlag2);
+				LiteralsPUN = TransistorExactSynthesis(dir, FuncName + "PUN", InputNegFuncs.first, InputNegFuncs.second, transistors_PUN, 1, OutInvFlags[0], cgStringPUN, timeBound, nPreSetTransistors, DepthLimited, AccFlag1, AccFlag2);
 			}
 			SAT *= LiteralsPUN.second.first;
 			SATDepthLimited *= LiteralsPUN.second.second;
@@ -571,22 +638,24 @@ int main(int argc, char* argv[]) {
 		for (int c = 0; c < Funcs.size(); c++)
 			spiceName.erase(spiceName.begin());
 		writeSpice(spicepath + spiceName + ".sp", spiceName, LiteralsAll, transistors_PUN, transistors_PDN, PathStatistics);
+		// Save original name for CSV before stripping marker characters
+		string csvFuncName = FuncName;
 		// version: 2023/4/29
 		// remove the first characters '!', ' '
 		for (int i = 0; i < Funcs.size(); i++)
 			FuncName.erase(FuncName.begin());
 		if (CountInputINV) {
 			if (DepthLimited)
-				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
+				fExcel << csvFuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << LiteralsPDN.first.size() << "," << LiteralsPUN.first.size() << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
 			else
- 				fExcel << FuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
+ 				fExcel << csvFuncName << "," << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << LiteralsPDN.first.size() << "," << LiteralsPUN.first.size() << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
 			cout << "Total transistors: " << NPTransistorsWithINV(LiteralsAll, LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << endl;
 		}	
 		else {
 			if (DepthLimited)
-				fExcel << FuncName << "," << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
+				fExcel << csvFuncName << "," << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << LiteralsPDN.first.size() << "," << LiteralsPUN.first.size() << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << "," << SATDepthLimited << endl;
 			else
-				fExcel << FuncName << "," << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
+				fExcel << csvFuncName << "," << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << "," << LiteralsPDN.first.size() << "," << LiteralsPUN.first.size() << "," << cgStringPDN << "," << cgStringPUN << "," << elapsed_time.count() << "," << string((SAT) ? "SAT" : "UNSAT") << endl;
 			cout << "Total transistors: " << NPTransistorsWithoutINV(LiteralsPDN.first.size() + LiteralsPUN.first.size(), OutInvFlags) << endl;
 		}
 
@@ -594,7 +663,10 @@ int main(int argc, char* argv[]) {
 		std::remove("NegFunc.eqn");
 		std::remove("NegFunc_out.eqn");
 		// Remove CNF files generated during synthesis
-		string cleanCmd = "rm -f " + string(argv[1]) + "*.cnf 2>/dev/null";
+		string cleanCmd = "rm -f " + dir + "*.cnf 2>/dev/null";
+		system(cleanCmd.c_str());
+		// Remove .dot and .pdf graph files
+		cleanCmd = "rm -f Transistors_*.dot Transistors_*.pdf " + dir + "Transistors_*.dot " + dir + "Transistors_*.pdf 2>/dev/null";
 		system(cleanCmd.c_str());
 
 		//	// the following can be annotated

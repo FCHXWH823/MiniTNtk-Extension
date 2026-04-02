@@ -1,1 +1,1 @@
- P361(7): a*!b*!c+!a*b*!c+!a*!b*c+a*b*c+c*d+a*d
+ P360(8): !b*!c*!d+!a*b*!c+!a*!b*c+a*b*c+c*d+a*d

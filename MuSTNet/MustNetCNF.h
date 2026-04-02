@@ -38,6 +38,9 @@ private:
 	int SatResult;
 	int AccTech1Flag, AccTech2Flag;
 	int placementFlag;
+	int DepthLimited;
+	int K; // max series path length limit
+	int MaxDepth; // actual max depth from last ParseCnf
 
 	// === SAT Variable arrays ===
 	// gateVar[m][l]: MOS m assigned literal l (0..2*nInputs-1)
@@ -92,6 +95,10 @@ public:
 	void CreateSeparationClauses();
 	void CreateAllClauses();
 
+	// Depth-limited path constraints
+	void CreateAtMostKClause(vector<int> cnfvars, int K);
+	void CreateKLimitedPathConstraints(int K);
+
 	// Placement constraints (Phase 2)
 	void CreateTransistorAllocClauses();   // C7: ExactlyOne(j,f) per MOS
 	void CreateColumnAllocClauses();       // C8: ExactlyOne(m,f) per column
@@ -127,6 +134,19 @@ public:
 	void SetPlacementFlag(int f) { placementFlag = f; }
 	int GetPlacementFlag() { return placementFlag; }
 	string GetCGString() { return CGString; }
+
+	// Depth-limited getters/setters
+	void SetDepthLimitedFlag(int flag) { DepthLimited = flag; }
+	int GetDepthLimited() { return DepthLimited; }
+	int getK() {
+		int max = 0;
+		for (auto Onset : Onsets)
+			if ((int)Onset.size() > max)
+				max = Onset.size();
+		return max;
+	}
+	int GetMaxDepth() { return MaxDepth; }
+	int GetIsDepthLimited() { return MaxDepth <= K; }
 };
 
 // MuSTNet synthesis function (parallel to TransistorExactSynthesis)

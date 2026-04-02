@@ -6,10 +6,10 @@
 // ==================== Constructor / Destructor ====================
 
 MustNetCNF::MustNetCNF()
-	: nCnfVars(0), nInputs(0), SatResult(0), AccTech1Flag(1), AccTech2Flag(1), placementFlag(0) {}
+	: nCnfVars(0), nInputs(0), SatResult(0), AccTech1Flag(1), AccTech2Flag(1), placementFlag(0), DepthLimited(0), K(0), MaxDepth(0) {}
 
 MustNetCNF::MustNetCNF(MustNetNtk Ntk)
-	: ntk(Ntk), nCnfVars(0), nInputs(0), SatResult(0), AccTech1Flag(1), AccTech2Flag(1), placementFlag(0) {}
+	: ntk(Ntk), nCnfVars(0), nInputs(0), SatResult(0), AccTech1Flag(1), AccTech2Flag(1), placementFlag(0), DepthLimited(0), K(0), MaxDepth(0) {}
 
 MustNetCNF::~MustNetCNF() {}
 
@@ -590,6 +590,51 @@ vector<int> MustNetCNF::CreatePriorClauses() {
 	return VarInputIds;
 }
 
+// ==================== Depth-Limited Path Constraints ====================
+
+static void mustnetCombinationsHelper(vector<int>& nums, int start, int n, vector<int>& combination, vector<vector<int>>& result) {
+	if (n == 0) {
+		result.push_back(combination);
+		return;
+	}
+	for (int i = start; i <= (int)nums.size() - n; i++) {
+		combination.push_back(nums[i]);
+		mustnetCombinationsHelper(nums, i + 1, n - 1, combination, result);
+		combination.pop_back();
+	}
+}
+
+static vector<vector<int>> mustnetCombinations(vector<int>& nums, int n) {
+	vector<vector<int>> result;
+	vector<int> combination;
+	mustnetCombinationsHelper(nums, 0, n, combination, result);
+	return result;
+}
+
+void MustNetCNF::CreateAtMostKClause(vector<int> cnfvars, int K) {
+	if (K < (int)cnfvars.size()) {
+		vector<vector<int>> vCnfvars = mustnetCombinations(cnfvars, K + 1);
+		for (int j = 0; j < (int)vCnfvars.size(); j++) {
+			for (int k = 0; k < (int)vCnfvars[j].size(); k++)
+				vCnfvars[j][k] = -vCnfvars[j][k];
+			clauses.push_back(vCnfvars[j]);
+		}
+	}
+}
+
+void MustNetCNF::CreateKLimitedPathConstraints(int K) {
+	int nPos = PosRepPattern.size();
+	int nPairs = ntk.nPairs();
+	for (int iP = 0; iP < nPos; iP++) {
+		vector<int> FlowCnfVars;
+		for (int pi = 0; pi < nPairs; pi++) {
+			FlowCnfVars.push_back(flowL[pi][iP]);
+			FlowCnfVars.push_back(flowR[pi][iP]);
+		}
+		CreateAtMostKClause(FlowCnfVars, K);
+	}
+}
+
 // Generates all constraints in order
 void MustNetCNF::CreateAllClauses() {
 	CreateGateAssignClauses();
@@ -598,6 +643,10 @@ void MustNetCNF::CreateAllClauses() {
 	CreateAuxEpOnClauses();
 	CreateFlowClauses();
 	CreateSeparationClauses();
+	if (DepthLimited) {
+		K = getK();
+		CreateKLimitedPathConstraints(K);
+	}
 	if (placementFlag)
 		CreatePlacementClauses();
 }
@@ -810,6 +859,12 @@ vector<string> MustNetCNF::ParseCnf(int mos, vector<transistor>& Transistors,
 		for (int mosIdx : path)
 			mosMaxPathLen[mosIdx] = max(mosMaxPathLen[mosIdx], (int)path.size());
 
+	// Compute max depth (longest source→output path)
+	MaxDepth = 0;
+	for (auto& path : allPaths)
+		if ((int)path.size() > MaxDepth)
+			MaxDepth = (int)path.size();
+
 	// Build transistor objects
 	Transistors.clear();
 	for (int i = 0; i < (int)transistor_pairs.size(); i++) {
@@ -907,7 +962,9 @@ pair<vector<string>, pair<int, int>> MustNetExactSynthesis(
 		if (cnf.GetAccFlag2())
 			cnf.CreatePriorClauses();
 
-		// Create all constraints
+		cnf.SetDepthLimitedFlag(DepthLimited);
+
+		// Create all constraints (includes K-limited path constraints if DepthLimited)
 		cnf.CreateAllClauses();
 
 		// Write CNF and solve
@@ -925,9 +982,33 @@ pair<vector<string>, pair<int, int>> MustNetExactSynthesis(
 			cnfOutPath, dir);
 
 		if (cnf.GetSatResult()) {
-			SatFlag = 1;
-			cgStringOut = cnf.GetCGString();
-			return make_pair(Literals, make_pair(1, 1));
+			if (!DepthLimited) {
+				SatFlag = 1;
+				cgStringOut = cnf.GetCGString();
+				return make_pair(Literals, make_pair(1, 1));
+			}
+			// Depth-limited re-solve loop: if depth exceeds K, block & re-solve
+			int AddBlockConstraintsTimes = 0;
+			while (AddBlockConstraintsTimes < 50) {
+				if (cnf.GetIsDepthLimited()) {
+					cgStringOut = cnf.GetCGString();
+					return make_pair(Literals, make_pair(1, 1));
+				}
+				cout << "[MuSTNet] Depth " << cnf.GetMaxDepth() << " > K=" << cnf.getK()
+					 << ", re-solving (iter " << AddBlockConstraintsTimes << ")..." << endl;
+				// ParseCnf already added a block clause; re-write and re-solve
+				cnf.WriteCnf(cnfPath);
+				system(cmd.c_str());
+				Literals = cnf.ParseCnf(mos, Transistors, INVOUT, cnfOutPath, dir);
+				if (!cnf.GetSatResult())
+					break; // no more solutions at this transistor count
+				AddBlockConstraintsTimes++;
+			}
+			// If we exhausted re-solve attempts or went UNSAT, report depth status
+			if (cnf.GetSatResult() && cnf.GetIsDepthLimited()) {
+				cgStringOut = cnf.GetCGString();
+				return make_pair(Literals, make_pair(1, cnf.GetIsDepthLimited()));
+			}
 		}
 
 		nTransistors++;
