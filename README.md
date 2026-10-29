@@ -32,7 +32,7 @@ sudo cp ./build/dynamic/bin/minisat /usr/bin/minisat
 
 # Build MiniTNtk
 cd MiniTNtk-Extension
-g++ -std=c++17 -I. -g *.cpp -o MiniTNtk.out
+g++ -std=c++17 -I. -O2 *.cpp -o MiniTNtk.out
 ```
 
 > **Note:** Do NOT add `MuSTNet/*.cpp` to the compile command — the bridge file `MustNetInc.cpp` already includes them.
@@ -60,10 +60,45 @@ Optional arguments:
   --acc2           acceleration: pre-defined transistors for existing literals (default: true)
   --no-acc2        disable acceleration technique 2
   --spice-dir      path for generated .sp files (default: ./out/)
+  --width          W in microns for every transistor (default: per-transistor)
+  --length         L in microns for every transistor (default: per-transistor)
+  --spice-models   emit the .model cards (default: false)
+  --keep-name      do not strip the leading marker character(s) from the name
   --mustnet        use MuSTNet mode (default: false)
   --placement      enable placement constraints in MuSTNet (default: false)
   --csv            path of output result CSV file (default: {dir}/PClassResults.csv)
 ```
+
+### Transistor sizing
+
+By default each transistor keeps the width synthesis chose for it -- `1.5u`
+pMOS and `0.75u` nMOS in the networks, `0.5u`/`0.25u` in the input inverters --
+and `L=0.05u`. `--width` and `--length` override **every** transistor,
+inverters included:
+
+```bash
+./MiniTNtk.out --dir ./ --spice-dir ./out/ --width 0.5 --length 0.05
+```
+
+A uniform size is what makes a netlist comparable against one from another
+tool: with the sizings different, a difference in the placed cell cannot be
+attributed to the topology.
+
+### Reading the netlist with Astran
+
+The emitted `.sp` is accepted by [Astran](https://github.com/rtimbo/astran)'s
+netlist reader as it stands. Three things in it are what that needs, and all
+three are also just correct SPICE:
+
+| | |
+|---|---|
+| the path-statistics header is a `*` comment | `//` is not a SPICE comment, and a reader that takes the line literally fails on it before reaching the circuit |
+| the subcircuit is closed with `.ends <name>` | a bare `.end` only terminates the deck, so the `.subckt` stayed open and the cell was never registered |
+| the `.model` cards are omitted unless asked for | Astran stops at them wherever they appear, and then reports only `Could not find cell netlist` |
+
+So `--spice-models` is the one flag that makes the output unreadable to Astran.
+Pass it when the deck is going to a circuit simulator, which does need the
+model cards, and leave it off for layout.
 
 ### Examples
 

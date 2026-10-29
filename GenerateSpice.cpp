@@ -184,7 +184,7 @@ void TransistorsReorder(vector<transistor>& Transistors, int mos) {
     }
 }
 
-void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<transistor> transistorsPUN, vector<transistor> transistorsPDN, map<string, int> path_statistics) {
+void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<transistor> transistorsPUN, vector<transistor> transistorsPDN, map<string, int> path_statistics, SpiceOptions opt) {
     set<string> PinNames;
     PinNames.insert("VCC");
     PinNames.insert("GND");
@@ -200,32 +200,39 @@ void writeSpice(string file, string CircktName, set<string> AllLiterals, vector<
     string path_statistics_str = "";
     for (auto it : path_statistics)
         path_statistics_str += it.first + ": " + to_string(it.second) + "; ";
-    f << "// Path statistics: " << path_statistics_str << endl;
+    // '*' and not '//': '//' is not a SPICE comment, and a reader that takes
+    // the line literally fails on it before reaching the circuit.
+    f << "* Path statistics: " << path_statistics_str << endl;
     f << ".subckt " << CircktName << " ";
     for (auto Pin : PinNames)
         f << Pin << " ";
     f << endl;
-    f << ".model nmos NMOS level=1 VTO=0.4 KP=120u" << endl;
-    f << ".model pmos PMOS level=1 VTO=-0.4 KP=40u" << endl;
+    if (opt.models) {
+        f << ".model nmos NMOS level=1 VTO=0.4 KP=120u" << endl;
+        f << ".model pmos PMOS level=1 VTO=-0.4 KP=40u" << endl;
+    }
     f << endl;
     int i = 0;
     TransistorsReorder(transistorsPUN, 1);
     TransistorsReorder(transistorsPDN, 0);
-    for (auto t : transistorsPUN) {
-       // f << "M" + to_string(i) << " " << t.Drain << " " << t.Gate << " " << t.Source << " " << t.Substrate << " " << t.Mos << " " << "W=" << t.W << "n " << "L=" << t.L << "n " << "nfin=" << t.nFin << endl;
-        // f << "+ ad=0p pd=0u as=0p ps=0u" << endl;
-        // 45 nm
-        f << "M" + to_string(i) << " " << t.Drain << " " << t.Gate << " " << t.Source << " " << t.Substrate << " " << t.Mos << " " << "W=" << t.W << "u " << "L=" << t.L << "u " << endl;
+    // One writer for both sides, so an override cannot reach the pull-up and
+    // miss the pull-down.
+    auto emit = [&](const transistor& t) {
+        double w = opt.W >= 0 ? opt.W : t.W;
+        double l = opt.L >= 0 ? opt.L : t.L;
+        f << "M" + to_string(i) << " " << t.Drain << " " << t.Gate << " " << t.Source << " " << t.Substrate << " " << t.Mos << " " << "W=" << w << "u " << "L=" << l << "u " << endl;
         f << "+ ad=0p pd=0u as=0p ps=0u" << endl;
         i++;
-    }
-    for (auto t : transistorsPDN) {
-        // f << "M" + to_string(i) << " " << t.Drain << " " << t.Gate << " " << t.Source << " " << t.Substrate << " " << t.Mos << " " << "W=" << t.W << "n " << "L=" << t.L << "n " << "nfin=" << t.nFin << endl;
-        // f << "+ ad=0p pd=0u as=0p ps=0u" << endl;
-        f << "M" + to_string(i) << " " << t.Drain << " " << t.Gate << " " << t.Source << " " << t.Substrate << " " << t.Mos << " " << "W=" << t.W << "u " << "L=" << t.L << "u " << endl;
-        f << "+ ad=0p pd=0u as=0p ps=0u" << endl;
-        i++;
-    }
+    };
+    for (auto t : transistorsPUN)
+        emit(t);
+    for (auto t : transistorsPDN)
+        emit(t);
+    // '.ends <name>' closes the subcircuit; a bare '.end' only terminates the
+    // deck, so the .subckt stayed open and a reader that requires it closed --
+    // Astran does -- never registered the cell at all.  '.end' still follows,
+    // which is what a standalone deck wants and is harmless either way.
+    f << ".ends " << CircktName << endl;
     f << ".end" << endl;
     f.close();
 }

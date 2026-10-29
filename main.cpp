@@ -515,6 +515,26 @@ int main(int argc, char* argv[]) {
 	program.add_argument("--spice-dir")
 		.help("path for generated .sp files (default: ./out/)")
 		.default_value(string("./out/"));
+	program.add_argument("--width")
+		.help("W, in microns, for every transistor in the .sp (default: the "
+		      "per-transistor sizing synthesis chose)")
+		.default_value(-1.0)
+		.scan<'g', double>();
+	program.add_argument("--length")
+		.help("L, in microns, for every transistor in the .sp (default: the "
+		      "per-transistor sizing synthesis chose, 0.05)")
+		.default_value(-1.0)
+		.scan<'g', double>();
+	program.add_argument("--spice-models")
+		.help("emit the .model cards; a simulator needs them, Astran's netlist "
+		      "reader rejects them (default: false)")
+		.default_value(false)
+		.implicit_value(true);
+	program.add_argument("--keep-name")
+		.help("do not strip the leading marker character(s) from the cell name, "
+		      "so 'XOR3' stays XOR3 instead of becoming OR3 (default: false)")
+		.default_value(false)
+		.implicit_value(true);
 	program.add_argument("--mustnet")
 		.help("use MuSTNet mode (default: false)")
 		.default_value(false)
@@ -544,6 +564,11 @@ int main(int argc, char* argv[]) {
 	int DepthLimited = program.get<bool>("--depth-limited") ? 1 : 0;
 	int CountInputINV = program.get<bool>("--no-count-inv") ? 0 : (program.get<bool>("--count-inv") ? 1 : 1);
 	string spicepath = program.get<string>("--spice-dir");
+	bool KeepName = program.get<bool>("--keep-name");
+	SpiceOptions spiceOpt;
+	spiceOpt.W = program.get<double>("--width");
+	spiceOpt.L = program.get<double>("--length");
+	spiceOpt.models = program.get<bool>("--spice-models");
 	if (!spicepath.empty() && spicepath.back() != '/')
 		spicepath += '/';
 	int useMustNet = program.get<bool>("--mustnet") ? 1 : 0;
@@ -635,9 +660,10 @@ int main(int argc, char* argv[]) {
 			spiceName += "_DepthLimited";
 		if (useMustNet)
 			spiceName += "_MuSTNet";
-		for (int c = 0; c < Funcs.size(); c++)
-			spiceName.erase(spiceName.begin());
-		writeSpice(spicepath + spiceName + ".sp", spiceName, LiteralsAll, transistors_PUN, transistors_PDN, PathStatistics);
+		if (!KeepName)
+			for (int c = 0; c < Funcs.size(); c++)
+				spiceName.erase(spiceName.begin());
+		writeSpice(spicepath + spiceName + ".sp", spiceName, LiteralsAll, transistors_PUN, transistors_PDN, PathStatistics, spiceOpt);
 		// Save original name for CSV before stripping marker characters
 		string csvFuncName = FuncName;
 		// version: 2023/4/29
